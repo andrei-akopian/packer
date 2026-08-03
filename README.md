@@ -25,6 +25,7 @@ A small archive utility in ruby.
 - age
 - gpg
 - picocrypt
+- openssl
 
 ## Information Backends
 
