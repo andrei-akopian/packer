@@ -55,6 +55,7 @@ USAGE = <<~TEXT
     -e, --encrypt TOOL    Encryption backend (default: none)
     -i, --info TOOL       Info backend for the file listing (tree, du, gdu)
     -o, --output FILE     Archive path (default: ./<target>_<timestamp><ext>)
+    -l, --list            List installed tools and exit (runs nothing)
     -h, --help            Show this help
 
   The target must exist. Every requested backend is validated against the
@@ -74,7 +75,7 @@ end
 # Argument parsing (forgiving: --key=value and --key value both work)
 # ---------------------------------------------------------------------------
 def parse_args(argv)
-  opts = { compress: nil, encrypt: nil, info: nil, output: nil, help: false, target: nil }
+  opts = { compress: nil, encrypt: nil, info: nil, output: nil, help: false, list: false, target: nil }
   key_map = { "c" => :compress, "e" => :encrypt, "i" => :info, "o" => :output }
 
   i = 0
@@ -83,6 +84,8 @@ def parse_args(argv)
     case arg
     when "-h", "--help"
       opts[:help] = true
+    when "-l", "--list"
+      opts[:list] = true
     when /^--(compress|encrypt|info|output)(?:=(.*))?$/
       key = Regexp.last_match(1).to_sym
       val = Regexp.last_match(2)
@@ -354,6 +357,11 @@ def main(argv)
   end
   if opts[:help]
     puts USAGE
+    return 0
+  end
+  if opts[:list]
+    puts banner
+    print_detected(scan_availability)
     return 0
   end
   unless opts[:target]
