@@ -34,6 +34,7 @@ BACKENDS = {
     "kryptor"   => { tools: %w[kryptor],   ext: ".kryptor", desc: "kryptor" },
     "age"       => { tools: %w[age],       ext: ".age",     desc: "age -p" },
     "gpg"       => { tools: %w[gpg],       ext: ".gpg",     desc: "gpg --symmetric" },
+    "openssl"   => { tools: %w[openssl],   ext: ".enc",     desc: "openssl enc" },
     "picocrypt" => { tools: %w[picocrypt], ext: ".pcv",     desc: "picocrypt" }
   },
   info: {
@@ -242,7 +243,8 @@ def encrypt_command(name, input, output, bins)
   when "kryptor"   then "#{bins[0]} encrypt #{i} -o #{o}"
   when "age"       then "#{bins[0]} -p -o #{o} #{i}"
   when "gpg"       then "#{bins[0]} --symmetric --cipher-algo AES256 -o #{o} #{i}"
-  when "picocrypt" then "#{bins[0]} -e #{i} #{o}"
+  when "openssl"   then "#{bins[0]} enc -aes-256-cbc -pbkdf2 -salt -in #{i} -out #{o}"
+  when "picocrypt" then "#{bins[0]} #{i}"
   end
 end
 

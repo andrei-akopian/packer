@@ -11,24 +11,24 @@ A small archive utility in ruby.
 
 ## Compression Backends
 
-- zip
-- bz2
-- 7z
-- ouch
-- xz
-- zstd
-- atool
+- [zip](https://infozip.sourceforge.net/Zip.html)
+- [bz2 (bzip2)](https://sourceware.org/bzip2/)
+- [7z (7-Zip)](https://www.7-zip.org/)
+- [ouch](https://github.com/vrmiguel/ouch)
+- [xz](https://tukaani.org/xz/)
+- [zstd](https://github.com/facebook/zstd)
+- [atool](https://www.nongnu.org/atool/)
 
 ## Encryption Backends
 
-- kryptor
-- age
-- gpg
-- picocrypt
-- openssl
+- [kryptor](https://github.com/samuel-lucas6/Kryptor)
+- [age](https://age-encryption.org/)
+- [gpg](https://gnupg.org/)
+- [openssl](https://www.openssl.org/)
+- [picocrypt](https://github.com/HACKERALERT/Picocrypt)
 
 ## Information Backends
 
-- tree
-- du / gdu -h
-
+- [tree](https://gitlab.com/OldManProgrammer/unix-tree)
+- [du (GNU coreutils)](https://www.gnu.org/software/coreutils/)
+- [gdu](https://github.com/dundee/gdu)
