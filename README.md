@@ -9,6 +9,8 @@ Alternative CLI tools like [`ouch`](https://github.com/ouch-org/ouch), [`atool`]
 > [!WARNING]
 > This tool is LLM generated, and hasn't been thoroughly reviewed.
 
+![GIF demo showing the tool in use.](./assets/demo.gif)
+
 [Link (this) repository on Github](https://github.com/andrei-akopian/packer). Licensed under [MIT License](./LICENSE.md)
 
 ## Functionality
