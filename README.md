@@ -113,4 +113,4 @@ bash test_packer.sh
 
 ## Credits
 
-Thanks goes to the developers of ruby, picocrypt, tar, ouch, and other tools this script takes advantage of for doing the hard work.
+Thanks goes to the developers of ruby, picocrypt, tar, ouch, and other tools this script takes advantage of for the heavy lifting.
