@@ -4,12 +4,12 @@ A small, self-contained Ruby utility for creating, compressing, and encrypting a
 
 Intended usage is for creating at rest archives of files, to be stored in locations you distrust. For example cheap cloud storage providers.
 
-Alternatives to this tool are [`ouch`](https://github.com/ouch-org/ouch), `atool`, [`picocrypt`](https://github.com/Picocrypt/CLI), etc. But they focus on either compression and encryption. Packer combines them into a single utility. For encrypted drives see [VeraCrypt](https://veracrypt.io/en/Downloads.html), or your operating system's stock disk encryption software.
+Alternative CLI tools like [`ouch`](https://github.com/ouch-org/ouch), [`atool`](https://www.nongnu.org/atool/), [`picocrypt`](https://github.com/Picocrypt/CLI) focus on either compression and encryption. Packer combines them into a single utility. For encrypted drives see [VeraCrypt](https://veracrypt.io/en/Downloads.html), or stock OS disk encryption software. For GUI try [Keka](https://www.keka.io/en/).
 
 > [!WARNING]
 > This tool is LLM generated, and hasn't been thoroughly reviewed.
 
-[Link (this) repository on Github](https://github.com/andrei-akopian/packer)
+[Link (this) repository on Github](https://github.com/andrei-akopian/packer). Licensed under [MIT License](./LICENSE.md)
 
 ## Functionality
 
@@ -106,3 +106,11 @@ There is a suite of tests:
 ```bash
 bash test_packer.sh
 ```
+
+### Roadmap
+
+- [ ] Consider publishing to a repository.
+
+## Credits
+
+Thanks goes to the developers of ruby, picocrypt, tar, ouch, and other tools this script takes advantage of for doing the hard work.
