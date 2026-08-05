@@ -14,6 +14,8 @@
 #   ./packer.rb -c zip -e age ~/data
 #   ./packer.rb --decompress backup.tar.gz
 #   ./packer.rb -d backup.tar.gz.age -o restored
+#
+# Github: https://github.com/andrei-akopian/packer
 
 require "shellwords"
 require "fileutils"
