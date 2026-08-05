@@ -1,20 +1,21 @@
 # Packer
 
-A small, self-contained Ruby utility for creating and extracting compressed
-and/or encrypted archives.  It uses only the Ruby standard library and the CLI
-archiving tools that are already installed on your system.
+A small, self-contained Ruby utility for creating, compressing, and encrypting archives on Unix systems. Only dependencies are Ruby standard library and relevant CLI utilities already pre-installed on your system. Encryption is via symmetric keys (passphrases) and handled by the encryption utility you select.
 
-## What it does
+Intended usage is for creating at rest archives of files, to be stored in locations you distrust. For example cheap cloud storage providers.
 
-- **Compression** – packs a file or directory into one of several archive formats.
-- **Compression levels** – choose between `none`, `min`, `some`, and `max`.
-- **Provider selection** – you pick a *format* (e.g. `tar.gz`, `zip`, `7z`); the
-  script picks the first installed *provider* that can create it.
-- **Encryption** – optionally encrypt the archive with `age`, `gpg`, `openssl`,
-  `kryptor`, or `picocrypt`.
-- **Decryption / decompression** – `packer --decompress archive.tar.gz` or
-  `packer -d archive.tar.gz.age` restores the original directory.
-- **Before / after overview** – shows file count, total size, and archive size.
+Alternatives to this tool are `ouch`, `atool`, `picocrypt`, etc. But they focus on either compression and encryption. Packer combines them into a single utility. For encrypted drives see VeraCrypt, or your operating system's stock disk encryption software.
+
+> [!WARNING]
+> This tool is LLM generated, and hasn't been thoroughly reviewed.
+
+## Functionality
+
+- Archive formats: (e.g. `tar.gz`, `zip`, `7z`), provided by `ouch`, `atool` or other tools already installed on your system.
+  - Compression levels: `none`, `min`, `some`, and `max`. Different formats have different compression level systems, these defaults hide them under a single API.
+- Encryption backends: `age`, `gpg`, `openssl`, `kryptor`, or `picocrypt`.
+- Automatic decryption and unpacking: `packer --decompress archive.tar.gz`.
+- Tools like `tree` or `du` auto print archive contents and its size. You can copy their output for record keeping.
 
 ## Requirements
 
@@ -27,6 +28,16 @@ archiving tools that are already installed on your system.
 Run `packer --list` to see which formats and providers are currently available.
 
 ## Usage
+
+> [!HINT]
+> It is recommended to `mv packer.rb ~/.local/bin/packer` and `chmod +x ~/.local/bin/packer`.
+
+When in doubt:
+
+```bash
+./packer.rb --list      # installed formats, providers, and levels
+./packer.rb --help      # full usage and examples
+```
 
 ### Compression
 
@@ -46,6 +57,8 @@ Run `packer --list` to see which formats and providers are currently available.
 
 ### Compression levels
 
+for `-l <level>`
+
 | Level | Meaning                                 |
 |-------|-----------------------------------------|
 | none  | store / no compression                  |
@@ -53,7 +66,7 @@ Run `packer --list` to see which formats and providers are currently available.
 | some  | balanced (default)                      |
 | max   | best compression, usually slower        |
 
-Not every provider supports every level.  If the first available provider cannot
+Not every backend supports every level. If the first available provider cannot
 honour a level, the script prints a warning, uses the provider's default, and
 tells you which formats support the requested level.
 
@@ -84,25 +97,10 @@ compression format is self-describing.
 ./packer.rb -d backup.enc -c tar.gz
 ```
 
-## Discovery
+## Development
+
+There is a suite of tests:
 
 ```bash
-./packer.rb --list      # installed formats, providers, and levels
-./packer.rb --help      # full usage and examples
+bash test_packer.sh
 ```
-
-## Error handling
-
-The script validates requested formats and providers up front and prints a clear
-error along with the installed alternatives.  For example, if you ask for a
-format that is not installed, it lists the formats that are available.
-
-## Testing
-
-```bash
-./test_packer.sh
-```
-
-The test suite exercises detection, compression, decompression, compression
-levels, and encryption round-trips for the tools that are installed on the
-current machine.
