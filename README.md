@@ -49,9 +49,6 @@ Run `packer --list` to see which formats and providers are currently available.
 
 ## Usage
 
-> [!TIP]
-> It is recommended to `mv packer.rb ~/.local/bin/packer` and `chmod +x ~/.local/bin/packer`.
-
 When in doubt:
 
 ```bash
