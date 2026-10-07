@@ -1,0 +1,15 @@
+default: digicert
+
+authorities:
+  digicert:
+    name: DigiCert
+    protocol: RFC 3161
+    url: http://timestamp.digicert.com
+  sectigo:
+    name: Sectigo
+    protocol: RFC 3161
+    url: http://timestamp.sectigo.com/rfc3161
+  globalsign:
+    name: GlobalSign
+    protocol: RFC 3161
+    url: http://timestamp.globalsign.com/tsa/r45standard
