@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test_packer.sh - automated tests for packer.rb
+# test_packer.sh - integration tests for the packer gem
 #
 # Tests detection, help, error handling, compression, decompression, compression
 # levels, and encryption round-trips against the tools that are installed on
@@ -7,7 +7,10 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKER="$SCRIPT_DIR/packer.rb"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PACKER="$PROJECT_DIR/exe/packer"
+LIBRARY="$PROJECT_DIR/lib/packer.rb"
+MOCK_BIN="$SCRIPT_DIR/mocks/packer-test-$$"
 
 # >= 8 characters: keeps gpg from complaining about a weak passphrase.
 PASS="PackTest#2026!"
@@ -25,27 +28,27 @@ heading() { printf '\n== %s ==\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # ---------------------------------------------------------------------------
-# Backend catalog is derived from packer.rb so tests stay in sync.
+# Backend catalog is derived from the library so tests stay in sync.
 # ---------------------------------------------------------------------------
 installed_formats() { # $1 = category
   ruby -e '
     load ARGV[0]
-    puts installed_backends(ARGV[1].to_sym).join(" ")
-  ' "$PACKER" "$1"
+    puts Packer.installed_backends(ARGV[1].to_sym).join(" ")
+  ' "$LIBRARY" "$1"
 }
 
 all_formats() { # $1 = category
   ruby -e '
     load ARGV[0]
-    catalog(ARGV[1].to_sym).each { |n, _| puts n }
-  ' "$PACKER" "$1"
+    Packer.catalog(ARGV[1].to_sym).each { |n, _| puts n }
+  ' "$LIBRARY" "$1"
 }
 
 ext_of() { # $1 = category, $2 = format name
   ruby -e '
     load ARGV[0]
-    puts catalog(ARGV[1].to_sym)[ARGV[2]].ext
-  ' "$PACKER" "$1" "$2"
+    puts Packer.catalog(ARGV[1].to_sym)[ARGV[2]].ext
+  ' "$LIBRARY" "$1" "$2"
 }
 
 # ---------------------------------------------------------------------------
@@ -75,7 +78,7 @@ feed_pty_once() { # single passphrase prompt (for decryption)
 # Fresh, compressible fixture.
 # ---------------------------------------------------------------------------
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP" "$MOCK_BIN"; rmdir "$(dirname "$MOCK_BIN")" 2>/dev/null || true' EXIT
 DATA="$TMP/data"
 mkdir -p "$DATA/docs"
 perl -e 'print "The quick brown fox jumps over the lazy dog.\n" x 20000' > "$DATA/docs/notes.txt"
@@ -191,7 +194,66 @@ for fmt in $(installed_formats compress); do
   fi
 done
 
-# ===========================================================================
+# ==========================================================================
+heading "Timestamping (offline mocked authorities)"
+# --------------------------------------------------------------------------
+TS_ARCHIVE="$TMP/timestamp.zip"
+TS_RESTORED="$TMP/timestamp_restored"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/ots" <<'MOCK_OTS'
+#!/usr/bin/env ruby
+if ARGV[0] == "stamp"
+  File.binwrite("#{ARGV[1]}.ots", "mock OpenTimestamps proof")
+elsif ARGV[0] == "verify"
+  puts "Calendar: Pending confirmation in Bitcoin blockchain"
+  exit(File.file?(ARGV[1]) ? 0 : 1)
+else
+  exit 2
+end
+MOCK_OTS
+cat > "$MOCK_BIN/openssl" <<'MOCK_OPENSSL'
+#!/usr/bin/env ruby
+if ARGV[0] == "ts" && ARGV.include?("-query")
+  File.binwrite(ARGV[ARGV.index("-out") + 1], "mock timestamp query")
+  exit 0
+elsif ARGV[0] == "ts" && ARGV.include?("-verify")
+  data = ARGV[ARGV.index("-data") + 1]
+  response = ARGV[ARGV.index("-in") + 1]
+  exit(File.file?(data) && File.file?(response) ? 0 : 1)
+end
+exit 2
+MOCK_OPENSSL
+cat > "$MOCK_BIN/curl" <<'MOCK_CURL'
+#!/usr/bin/env ruby
+output = ARGV[ARGV.index("--output") + 1]
+File.binwrite(output, "mock RFC 3161 response")
+exit 0
+MOCK_CURL
+chmod +x "$MOCK_BIN/ots" "$MOCK_BIN/openssl" "$MOCK_BIN/curl"
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -c zip -o "$TS_ARCHIVE" \
+   --timestamp both --tsa-url sectigo "$DATA" >/dev/null 2>&1 \
+   && [ -s "$TS_ARCHIVE.ots" ] && [ -s "$TS_ARCHIVE.tsr" ]; then
+  ok "both timestamp modes create detached proof sidecars"
+else
+  fail "both timestamp modes create detached proof sidecars"
+fi
+
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" --verify-timestamp "$TS_ARCHIVE" >/dev/null 2>&1; then
+  ok "adjacent OpenTimestamps and RFC 3161 proofs can be verified"
+else
+  fail "adjacent OpenTimestamps and RFC 3161 proofs can be verified"
+fi
+
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -d "$TS_ARCHIVE" -o "$TS_RESTORED" \
+   --delete-after-unzip >/dev/null 2>&1 \
+   && diff -r "$DATA" "$TS_RESTORED/data" >/dev/null 2>&1 \
+   && [ ! -e "$TS_ARCHIVE" ] && [ ! -e "$TS_ARCHIVE.ots" ] && [ ! -e "$TS_ARCHIVE.tsr" ]; then
+  ok "autodelete removes the archive and timestamp proofs after successful extraction"
+else
+  fail "autodelete removes the archive and timestamp proofs after successful extraction"
+fi
+
+# ==========================================================================
 heading "Encryption backends (round-trip)"
 # ---------------------------------------------------------------------------
 # gpg's default pinentry (curses) cannot be automated headless; give it a

@@ -1,0 +1,21 @@
+# Built Ruby gems and packaging output
+*.gem
+/pkg/
+
+# Local test and mock-tool artifacts
+/test/mocks/
+/coverage/
+
+# compression and encryption artifcats
+*.tar
+*.zst
+*.zip
+*.age
+
+# Timestamp sidecars generated while using Packer
+*.ots
+*.tsr
+
+# Bundler / Ruby tooling state
+/.bundle/
+/.yardoc/
