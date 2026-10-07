@@ -264,14 +264,14 @@ exit 0
 MOCK_CURL
 chmod +x "$MOCK_BIN/ots" "$MOCK_BIN/openssl" "$MOCK_BIN/curl"
 if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -c zip -o "$TS_ARCHIVE" \
-   --timestamp both --tsa-url sectigo "$DATA" >/dev/null 2>&1 \
+   -t both -T sectigo "$DATA" >/dev/null 2>&1 \
    && [ -s "$TS_ARCHIVE.ots" ] && [ -s "$TS_ARCHIVE.tsr" ]; then
   ok "both timestamp modes create detached proof sidecars"
 else
   fail "both timestamp modes create detached proof sidecars"
 fi
 
-if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" --verify-timestamp "$TS_ARCHIVE" >/dev/null 2>&1; then
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -V "$TS_ARCHIVE" >/dev/null 2>&1; then
   ok "adjacent OpenTimestamps and RFC 3161 proofs can be verified"
 else
   fail "adjacent OpenTimestamps and RFC 3161 proofs can be verified"

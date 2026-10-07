@@ -72,21 +72,24 @@ packer -c zip -o backup ~/Documents
 packer -c tar.gz -e age -o backup ~/Documents
 
 # Timestamp the final encrypted archive using both services
-packer -c tar.gz -e age --timestamp both -o backup ~/Documents
+packer -c tar.gz -e age -t both -o backup ~/Documents
 ```
 
 ### Timestamps
 
 ```bash
 # OpenTimestamps (Bitcoin-calendar based, initially pending confirmation)
-packer --timestamp ots ~/Documents
+packer -t ots ~/Documents
 
 # RFC 3161 through DigiCert (default), Sectigo, or GlobalSign
-packer --timestamp rfc3161 --tsa-url sectigo ~/Documents
+packer -t rfc3161 -T sectigo ~/Documents
 
 # Verify any adjacent proof(s); the archive file must be present
-packer --verify-timestamp backup.tar.gz.age
+packer -V backup.tar.gz.age
 ```
+
+Long forms remain available: `--timestamp`, `--tsa-url`, and
+`--verify-timestamp`.
 
 Packer timestamps the final deliverable (the encrypted file when encryption is
 enabled), and writes detached sidecars: `<archive>.tsr` for RFC 3161 and

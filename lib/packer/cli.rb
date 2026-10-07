@@ -40,14 +40,17 @@ def parse_args(argv)
         return { error: true }
       end
       opts[:decompress] = val
-    when "--timestamp", "--tsa-url", "--verify-timestamp"
+    when "-t", "-T", "-V", "--timestamp", "--tsa-url", "--verify-timestamp"
       val = argv[i += 1]
       unless val && !val.start_with?("-")
         warn "Error: #{arg} requires a value"
         return { error: true }
       end
-      key = { "--timestamp" => :timestamp, "--tsa-url" => :tsa_url,
-              "--verify-timestamp" => :verify_timestamp }[arg]
+      key = {
+        "-t" => :timestamp, "--timestamp" => :timestamp,
+        "-T" => :tsa_url, "--tsa-url" => :tsa_url,
+        "-V" => :verify_timestamp, "--verify-timestamp" => :verify_timestamp
+      }.fetch(arg)
       opts[key] = val
     when "--delete-after-unzip"
       opts[:delete_after_unzip] = true
@@ -123,16 +126,16 @@ def detailed_help
 
       Decompression (optionally decrypts first by file extension):
         packer -d, --decompress <archive> [-o <dir>]
-        packer --verify-timestamp <archive>
+        packer -V, --verify-timestamp <archive>
 
     OPTIONS
 
       -c, --compress FORMAT   Compression format (default: first installed)
       -l, --level LEVEL       Compression level: none, min, some, max (default: some)
       -e, --encrypt METHOD    Encryption method: age, gpg, openssl, kryptor, picocrypt
-          --timestamp MODE   Detached proof: ots, rfc3161, or both
-          --tsa-url NAME|URL RFC 3161 authority: digicert (default), sectigo, globalsign, or URL
-          --verify-timestamp FILE  Verify adjacent .ots and/or .tsr proofs
+      -t, --timestamp MODE    Detached proof: ots, rfc3161, or both
+      -T, --tsa-url NAME|URL  RFC 3161 authority: digicert (default), sectigo, globalsign, or URL
+      -V, --verify-timestamp FILE  Verify adjacent .ots and/or .tsr proofs
           --delete-after-unzip    Delete input archive and timestamp proofs after successful extraction
       -i, --info TOOL         Info backend: tree, du, gdu
       -o, --output PATH       Output archive (compression) or output directory (decompression)
@@ -158,8 +161,8 @@ def detailed_help
 
       packer -c tar.gz -l max ~/documents
       packer -c zip -e age -o backup.zip ~/photos
-      packer --timestamp both -c zip ~/photos
-      packer --verify-timestamp backup.zip
+      packer -t both -c zip ~/photos
+      packer -V backup.zip
       packer --decompress backup.tar.gz
       packer -d backup.tar.gz.age -o restored
   TEXT
