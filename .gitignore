@@ -6,6 +6,12 @@
 /test/mocks/
 /coverage/
 
+# compression and encryption artifcats
+*.tar
+*.zst
+*.zip
+*.age
+
 # Timestamp sidecars generated while using Packer
 *.ots
 *.tsr
