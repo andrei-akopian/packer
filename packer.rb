@@ -18,8 +18,10 @@
 require "shellwords"
 require "fileutils"
 require "tmpdir"
+require "open3"
+require "openssl"
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ---------------------------------------------------------------------------
 # Tool discovery
@@ -278,6 +280,12 @@ COMPRESSION_FORMATS = {
 COMPRESSION_ORDER = %w[zip tar.gz tar.bz2 tar.xz tar.zst 7z tar].freeze
 NONE_PREFERRED_ORDER = %w[zip 7z tar].freeze
 
+TSA_ENDPOINTS = {
+  "digicert" => "http://timestamp.digicert.com",
+  "sectigo" => "http://timestamp.sectigo.com/rfc3161",
+  "globalsign" => "http://timestamp.globalsign.com/tsa/r45standard"
+}.freeze
+
 # ---------------------------------------------------------------------------
 # Encryption providers
 # ---------------------------------------------------------------------------
@@ -424,6 +432,10 @@ def parse_args(argv)
     info: nil,
     output: nil,
     decompress: nil,
+    timestamp: nil,
+    tsa_url: nil,
+    verify_timestamp: nil,
+    delete_after_unzip: false,
     help: false,
     list: false,
     target: nil
@@ -446,8 +458,20 @@ def parse_args(argv)
         return { error: true }
       end
       opts[:decompress] = val
-    when /^--(compress|level|encrypt|info|output)(?:=(.*))?$/
+    when "--timestamp", "--tsa-url", "--verify-timestamp"
+      val = argv[i += 1]
+      unless val && !val.start_with?("-")
+        warn "Error: #{arg} requires a value"
+        return { error: true }
+      end
+      key = { "--timestamp" => :timestamp, "--tsa-url" => :tsa_url,
+              "--verify-timestamp" => :verify_timestamp }[arg]
+      opts[key] = val
+    when "--delete-after-unzip"
+      opts[:delete_after_unzip] = true
+    when /^--(compress|level|encrypt|info|output|timestamp|tsa-url|verify-timestamp)(?:=(.*))?$/
       key = Regexp.last_match(1).to_sym
+      key = { "tsa-url" => :tsa_url, "verify-timestamp" => :verify_timestamp }.fetch(key.to_s, key)
       val = Regexp.last_match(2)
       val = argv[i += 1] if val.nil? || val.empty?
       unless val
@@ -512,12 +536,17 @@ def detailed_help
 
       Decompression (optionally decrypts first by file extension):
         packer -d, --decompress <archive> [-o <dir>]
+        packer --verify-timestamp <archive>
 
     OPTIONS
 
       -c, --compress FORMAT   Compression format (default: first installed)
       -l, --level LEVEL       Compression level: none, min, some, max (default: some)
       -e, --encrypt METHOD    Encryption method: age, gpg, openssl, kryptor, picocrypt
+          --timestamp MODE   Detached proof: ots, rfc3161, or both
+          --tsa-url NAME|URL RFC 3161 authority: digicert (default), sectigo, globalsign, or URL
+          --verify-timestamp FILE  Verify adjacent .ots and/or .tsr proofs
+          --delete-after-unzip    Delete input archive and timestamp proofs after successful extraction
       -i, --info TOOL         Info backend: tree, du, gdu
       -o, --output PATH       Output archive (compression) or output directory (decompression)
       -d, --decompress FILE   Decompress / decrypt FILE
@@ -542,6 +571,8 @@ def detailed_help
 
       packer -c tar.gz -l max ~/documents
       packer -c zip -e age -o backup.zip ~/photos
+      packer --timestamp both -c zip ~/photos
+      packer --verify-timestamp backup.zip
       packer --decompress backup.tar.gz
       packer -d backup.tar.gz.age -o restored
   TEXT
@@ -580,6 +611,11 @@ def print_list
     status = backend.available? ? "" : " (missing)"
     puts "  #{name}#{status}"
   end
+  puts
+  puts "Timestamping:"
+  puts "  RFC 3161 (openssl + curl)#{find_tool('openssl') && find_tool('curl') ? '' : ' (missing tool)'}"
+  puts "    authorities: #{TSA_ENDPOINTS.keys.join(', ')}; custom endpoints via --tsa-url"
+  puts "  OpenTimestamps (ots)#{find_tool('ots') ? '' : ' (missing)'}"
 end
 
 # ---------------------------------------------------------------------------
@@ -633,6 +669,149 @@ end
 
 def run(cmd)
   system(cmd)
+end
+
+# Returns free bytes on the filesystem containing path, or nil if df is unavailable.
+def free_space(path)
+  output, status = Open3.capture2("df", "-Pk", path)
+  return nil unless status.success?
+
+  available_kb = Integer(output.lines.last.to_s.split[-3], exception: false)
+  available_kb && available_kb * 1024
+rescue Errno::ENOENT
+  nil
+end
+
+def timestamp_proof_paths(path)
+  { ots: "#{path}.ots", rfc3161: "#{path}.tsr" }
+end
+
+def timestamp_failure(message)
+  warn "Warning: timestamping failed: #{message}"
+  warn "         The archive is preserved, but it has no verified timestamp proof from this attempt."
+  false
+end
+
+# Creates a detached OpenTimestamps proof. It normally begins as a pending
+# calendar attestation and becomes Bitcoin-chain verifiable after confirmation.
+def stamp_ots(path, proof_path)
+  ots = find_tool("ots")
+  return timestamp_failure("'ots' is not installed; install opentimestamps-client") unless ots
+  return timestamp_failure("proof already exists: #{proof_path}") if File.exist?(proof_path)
+
+  output, error, status = Open3.capture3(ots, "stamp", path)
+  print output unless output.empty?
+  warn error unless error.empty?
+  unless status.success? && File.file?(proof_path) && File.size?(proof_path)
+    File.delete(proof_path) if File.exist?(proof_path)
+    return timestamp_failure("OpenTimestamps client did not produce a proof (network/calendar failure is possible)")
+  end
+
+  puts "  OpenTimestamps proof: #{proof_path} (calendar confirmation may still be pending)"
+  true
+rescue StandardError => e
+  File.delete(proof_path) if File.exist?(proof_path)
+  timestamp_failure(e.message)
+end
+
+# RFC 3161 timestamps are stored as detached DER .tsr files and verified before
+# being published next to the archive. Only the archive's SHA-256 imprint is sent.
+def stamp_rfc3161(path, proof_path, tsa_url)
+  openssl = find_tool("openssl")
+  curl = find_tool("curl")
+  return timestamp_failure("'openssl' is not installed") unless openssl
+  return timestamp_failure("'curl' is not installed (needed for RFC 3161 HTTP transport)") unless curl
+  return timestamp_failure("proof already exists: #{proof_path}") if File.exist?(proof_path)
+  unless tsa_url.match?(%r{\Ahttps?://}i)
+    return timestamp_failure("TSA URL must use http:// or https://")
+  end
+
+  ca_dir = OpenSSL::X509::DEFAULT_CERT_DIR
+  ca_file = OpenSSL::X509::DEFAULT_CERT_FILE
+  unless (ca_dir && File.directory?(ca_dir)) || (ca_file && File.file?(ca_file))
+    return timestamp_failure("system CA certificates were not found; cannot verify the TSA response")
+  end
+
+  Dir.mktmpdir("packer-ts-") do |dir|
+    request = File.join(dir, "request.tsq")
+    response = File.join(dir, "response.tsr")
+    _out, err, status = Open3.capture3(openssl, "ts", "-query", "-data", path,
+                                       "-sha256", "-cert", "-out", request)
+    return timestamp_failure("could not create RFC 3161 request: #{err.strip}") unless status.success?
+
+    _out, err, status = Open3.capture3(curl, "--fail", "--silent", "--show-error",
+                                      "--connect-timeout", "10", "--max-time", "45",
+                                      "-H", "Content-Type: application/timestamp-query",
+                                      "-H", "Accept: application/timestamp-reply",
+                                      "--data-binary", "@#{request}", "--output", response,
+                                      tsa_url)
+    return timestamp_failure("TSA request failed: #{err.strip}") unless status.success? && File.size?(response)
+
+    verify_args = [openssl, "ts", "-verify", "-data", path, "-in", response]
+    verify_args += ca_dir && File.directory?(ca_dir) ? ["-CApath", ca_dir] : ["-CAfile", ca_file]
+    _out, err, status = Open3.capture3(*verify_args)
+    return timestamp_failure("TSA response did not verify: #{err.strip}") unless status.success?
+
+    FileUtils.mv(response, proof_path)
+  end
+
+  puts "  RFC 3161 proof: #{proof_path} (verified against system trust store)"
+  true
+rescue StandardError => e
+  File.delete(proof_path) if File.exist?(proof_path)
+  timestamp_failure(e.message)
+end
+
+def verify_timestamp(path)
+  unless File.file?(path)
+    warn "Error: archive not found: #{path}"
+    return false
+  end
+
+  proofs = timestamp_proof_paths(path).select { |_, proof| File.file?(proof) }
+  if proofs.empty?
+    warn "Error: no adjacent timestamp proof found (expected #{timestamp_proof_paths(path).values.join(' or ')})"
+    return false
+  end
+
+  ok = true
+  proofs.each do |kind, proof|
+    if kind == :ots
+      ots = find_tool("ots")
+      unless ots
+        warn "Error: 'ots' is required to verify #{proof} (install opentimestamps-client)"
+        ok = false
+        next
+      end
+      output, error, status = Open3.capture3(ots, "verify", proof)
+    else
+      openssl = find_tool("openssl")
+      unless openssl
+        warn "Error: 'openssl' is required to verify #{proof}"
+        ok = false
+        next
+      end
+      ca_dir = OpenSSL::X509::DEFAULT_CERT_DIR
+      ca_file = OpenSSL::X509::DEFAULT_CERT_FILE
+      args = [openssl, "ts", "-verify", "-data", path, "-in", proof]
+      args += ca_dir && File.directory?(ca_dir) ? ["-CApath", ca_dir] : ["-CAfile", ca_file]
+      output, error, status = Open3.capture3(*args)
+    end
+    print output unless output.empty?
+    warn error unless error.empty?
+    pending = kind == :ots && output.match?(/pending confirmation/i)
+    if pending
+      puts "  OpenTimestamps proof: pending confirmation (not yet blockchain-verifiable)"
+      ok &&= status.success? || pending
+    else
+      puts "  #{kind == :ots ? 'OpenTimestamps' : 'RFC 3161'} proof: #{status.success? ? 'valid' : 'INVALID'}"
+      ok &&= status.success?
+    end
+  end
+  ok
+rescue StandardError => e
+  warn "Error: timestamp verification failed: #{e.message}"
+  false
 end
 
 # ---------------------------------------------------------------------------
@@ -700,7 +879,7 @@ def default_decompress_dir(input_path, comp_fmt)
   File.join(Dir.pwd, base)
 end
 
-def run_decompress(input, user_output_dir, force_format_name = nil)
+def run_decompress(input, user_output_dir, force_format_name = nil, delete_after = false)
   original_input = File.expand_path(input)
   unless File.exist?(original_input)
     warn "Error: archive not found: #{original_input}"
@@ -763,11 +942,24 @@ def run_decompress(input, user_output_dir, force_format_name = nil)
                                : default_decompress_dir(original_input, comp_fmt)
   FileUtils.mkdir_p(output_dir)
 
+  proof_files = timestamp_proof_paths(original_input).values.select { |path| File.file?(path) }
+  if proof_files.any?
+    puts "Timestamp proof sidecar(s) found: #{proof_files.join(', ')}"
+    puts "  Verify before relying on the archive with: packer --verify-timestamp #{original_input}"
+  end
+  if delete_after
+    puts "AUTODELETE after successful extraction is enabled: the input archive and its timestamp proof sidecars will be removed."
+  end
+
   puts "\n== Decompressing #{comp_fmt.name} with #{provider.name} =="
   cmd = provider.decompress.call(active_input, output_dir)
   ok = run(cmd)
   if ok
     puts "Done. Extracted to: #{output_dir}"
+    if delete_after
+      ([original_input] + proof_files).each { |path| File.delete(path) if File.file?(path) }
+      puts "  Deleted input archive and #{proof_files.size} timestamp proof sidecar(s)."
+    end
   else
     warn "Error: decompression command failed"
   end
@@ -814,6 +1006,13 @@ def print_after(archive, enc_out, total)
     puts "  Encrypted:   #{enc_out}"
     puts "  Encrypted:   #{human_size(File.size(enc_out))}  (#{pct(File.size(enc_out), total)})"
   end
+  [archive, enc_out].compact.each do |package|
+    timestamp_proof_paths(package).each_value do |proof|
+      next unless File.file?(proof)
+
+      puts "  Timestamp:   #{proof} (#{human_size(File.size(proof))})"
+    end
+  end
   puts hr
 end
 
@@ -840,7 +1039,42 @@ def main(argv)
   end
 
   if opts[:decompress]
-    return run_decompress(opts[:decompress], opts[:output], opts[:compress])
+    if opts[:timestamp] || opts[:tsa_url]
+      warn "Error: timestamp creation options cannot be used with decompression"
+      return 2
+    end
+    return run_decompress(opts[:decompress], opts[:output], opts[:compress], opts[:delete_after_unzip])
+  end
+
+  if opts[:verify_timestamp]
+    return 0 if verify_timestamp(File.expand_path(opts[:verify_timestamp]))
+
+    return 1
+  end
+
+  if opts[:delete_after_unzip]
+    warn "Error: --delete-after-unzip can only be used with --decompress"
+    return 2
+  end
+
+  timestamp_mode = opts[:timestamp]&.downcase
+  if timestamp_mode && !%w[ots rfc3161 both].include?(timestamp_mode)
+    warn "Error: unknown timestamp mode '#{opts[:timestamp]}'"
+    warn "       Modes: ots, rfc3161, both"
+    return 2
+  end
+  if opts[:tsa_url] && timestamp_mode && !%w[rfc3161 both].include?(timestamp_mode)
+    warn "Error: --tsa-url requires --timestamp rfc3161 or --timestamp both"
+    return 2
+  end
+  if opts[:tsa_url] && !timestamp_mode
+    warn "Error: --tsa-url requires --timestamp rfc3161 or --timestamp both"
+    return 2
+  end
+  tsa_url = TSA_ENDPOINTS.fetch(opts[:tsa_url]&.downcase, opts[:tsa_url])
+  if tsa_url && !tsa_url.match?(%r{\Ahttps?://}i)
+    warn "Error: --tsa-url must use http:// or https://"
+    return 2
   end
 
   unless opts[:target]
@@ -900,6 +1134,17 @@ def main(argv)
   files = collect_files(target)
   total = files.sum { |p| File.size(p) }
 
+  if timestamp_mode
+    puts "Timestamping adds detached proof sidecars only; Packer will not re-zip the package."
+  end
+  if opts[:encrypt]
+    free = free_space(File.dirname(archive))
+    estimate = (total * 2) + (1024 * 1024)
+    if free && free < estimate
+      warn "Warning: only #{human_size(free)} is free; compression plus keeping both the plain and encrypted archives may need roughly #{human_size(estimate)}."
+    end
+  end
+
   info_name = opts[:info] || installed_backends(:info).first
   print_before(target, files, total, info_name)
 
@@ -920,12 +1165,38 @@ def main(argv)
       return 1
     end
     enc_out = archive + enc_fmt.ext
+    free = free_space(File.dirname(enc_out))
+    required = File.size(archive) + (1024 * 1024)
+    if free && free < required
+      warn "Error: not enough free disk space to safely create the encrypted copy (#{human_size(free)} free; about #{human_size(required)} needed)."
+      warn "       The plain archive is preserved at #{archive}"
+      return 1
+    end
     return 1 unless run_encrypt(enc_fmt, archive, enc_out)
   end
 
+  timestamp_target = enc_out || archive
+  timestamp_ok = true
+  if timestamp_mode
+    proofs = timestamp_proof_paths(timestamp_target)
+    tsa_url ||= TSA_ENDPOINTS.fetch("digicert")
+    if %w[ots both].include?(timestamp_mode)
+      timestamp_ok = stamp_ots(timestamp_target, proofs[:ots]) && timestamp_ok
+    end
+    if %w[rfc3161 both].include?(timestamp_mode)
+      rfc_ok = stamp_rfc3161(timestamp_target, proofs[:rfc3161], tsa_url)
+      timestamp_ok = rfc_ok && timestamp_ok
+    end
+  end
+
   print_after(archive, enc_out, total)
-  puts "Done."
-  0
+  if timestamp_ok
+    puts "Done."
+    0
+  else
+    warn "Archive created, but one or more requested timestamp proofs were not obtained."
+    1
+  end
 end
 
 exit main(ARGV) if $PROGRAM_NAME == __FILE__

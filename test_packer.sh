@@ -191,7 +191,36 @@ for fmt in $(installed_formats compress); do
   fi
 done
 
-# ===========================================================================
+# ==========================================================================
+heading "Timestamping (offline mocked authorities)"
+# --------------------------------------------------------------------------
+MOCK_BIN="$SCRIPT_DIR/test/mocks"
+TS_ARCHIVE="$TMP/timestamp.zip"
+TS_RESTORED="$TMP/timestamp_restored"
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -c zip -o "$TS_ARCHIVE" \
+   --timestamp both --tsa-url sectigo "$DATA" >/dev/null 2>&1 \
+   && [ -s "$TS_ARCHIVE.ots" ] && [ -s "$TS_ARCHIVE.tsr" ]; then
+  ok "both timestamp modes create detached proof sidecars"
+else
+  fail "both timestamp modes create detached proof sidecars"
+fi
+
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" --verify-timestamp "$TS_ARCHIVE" >/dev/null 2>&1; then
+  ok "adjacent OpenTimestamps and RFC 3161 proofs can be verified"
+else
+  fail "adjacent OpenTimestamps and RFC 3161 proofs can be verified"
+fi
+
+if PATH="$MOCK_BIN:$PATH" ruby "$PACKER" -d "$TS_ARCHIVE" -o "$TS_RESTORED" \
+   --delete-after-unzip >/dev/null 2>&1 \
+   && diff -r "$DATA" "$TS_RESTORED/data" >/dev/null 2>&1 \
+   && [ ! -e "$TS_ARCHIVE" ] && [ ! -e "$TS_ARCHIVE.ots" ] && [ ! -e "$TS_ARCHIVE.tsr" ]; then
+  ok "autodelete removes the archive and timestamp proofs after successful extraction"
+else
+  fail "autodelete removes the archive and timestamp proofs after successful extraction"
+fi
+
+# ==========================================================================
 heading "Encryption backends (round-trip)"
 # ---------------------------------------------------------------------------
 # gpg's default pinentry (curses) cannot be automated headless; give it a
