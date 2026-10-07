@@ -167,6 +167,10 @@ after extraction succeeds.
 
 ## Development
 
+The gem loader is `lib/packer.rb`; provider definitions, archive operations,
+timestamping, and CLI parsing/orchestration live in separate files under
+`lib/packer/`.
+
 There is a suite of tests:
 
 ```bash

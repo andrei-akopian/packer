@@ -113,6 +113,39 @@ else
   fail "nonexistent target is rejected"
 fi
 
+if ! out="$(ruby "$PACKER" -c zip -o "$DATA/inside.zip" "$DATA" 2>&1)" \
+   && printf '%s' "$out" | grep -q "inside the directory being archived" \
+   && [ ! -e "$DATA/inside.zip" ]; then
+  ok "archive output inside its source directory is rejected"
+else
+  fail "archive output inside its source directory is rejected"
+fi
+
+EXISTING_ARCHIVE="$TMP/existing.zip"
+printf 'keep this file unchanged\n' > "$EXISTING_ARCHIVE"
+if ! ruby "$PACKER" -c zip -o "$EXISTING_ARCHIVE" "$DATA" >/dev/null 2>&1 \
+   && [ "$(<"$EXISTING_ARCHIVE")" = "keep this file unchanged" ]; then
+  ok "existing output files are never overwritten"
+else
+  fail "existing output files are never overwritten"
+fi
+
+if ! ruby "$PACKER" -c zip -e unknown -o "$TMP/invalid-encryption" "$DATA" >/dev/null 2>&1 \
+   && [ ! -e "$TMP/invalid-encryption.zip" ]; then
+  ok "invalid encryption is rejected before creating an archive"
+else
+  fail "invalid encryption is rejected before creating an archive"
+fi
+
+DASH_TARGET="$TMP/-leading-dash.txt"
+printf 'dash-leading source\n' > "$DASH_TARGET"
+if ruby "$PACKER" -c zip -o "$TMP/dash-source.zip" "$DASH_TARGET" >/dev/null 2>&1 \
+   && unzip -t "$TMP/dash-source.zip" >/dev/null 2>&1; then
+  ok "source names beginning with a dash are passed as file names"
+else
+  fail "source names beginning with a dash are passed as file names"
+fi
+
 # Request a compression format that is NOT installed -> mismatch error.
 all_c="$(all_formats compress)"
 inst_c="$(installed_formats compress)"
