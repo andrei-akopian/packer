@@ -134,7 +134,8 @@ def detailed_help
       -l, --level LEVEL       Compression level: none, min, some, max (default: some)
       -e, --encrypt METHOD    Encryption method: age, gpg, openssl, kryptor, picocrypt
       -t, --timestamp MODE    Detached proof: ots, rfc3161, or both
-      -T, --tsa-url NAME|URL  RFC 3161 authority: digicert (default), sectigo, globalsign, or URL
+      -T, --tsa-url NAME|URL  RFC 3161 authority preset (default: digicert) or URL
+                              Full preset list: --list or config/timestamp_authorities.yml
       -V, --verify-timestamp FILE  Verify adjacent .ots and/or .tsr proofs
           --delete-after-unzip    Delete input archive and timestamp proofs after successful extraction
       -i, --info TOOL         Info backend: tree, du, gdu

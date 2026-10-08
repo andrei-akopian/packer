@@ -25,3 +25,63 @@ authorities:
     name: Microsoft
     protocol: RFC 3161
     url: http://timestamp.acs.microsoft.com
+  github:
+    name: GitHub
+    protocol: RFC 3161
+    url: https://timestamp.githubapp.com/api/v1/timestamp
+  certum:
+    name: Certum
+    protocol: RFC 3161
+    url: http://time.certum.pl
+  entrust:
+    name: Entrust
+    protocol: RFC 3161
+    url: http://timestamp.entrust.net/TSS/RFC3161sha2TS
+  freetsa:
+    name: FreeTSA
+    protocol: RFC 3161
+    url: https://freetsa.org/tsr
+  dfn:
+    name: DFN Zeitstempel
+    protocol: RFC 3161
+    url: http://zeitstempel.dfn.de
+  signfiles:
+    name: SignFiles
+    protocol: RFC 3161
+    url: https://ca.signfiles.com/tsa/get.aspx
+  globalsign_r6advanced:
+    name: GlobalSign R6 Advanced
+    protocol: RFC 3161
+    url: http://timestamp.globalsign.com/tsa/r6advanced1
+  globalsign_advanced:
+    name: GlobalSign Advanced
+    protocol: RFC 3161
+    url: http://rfc3161timestamp.globalsign.com/advanced
+  globalsign_sha2:
+    name: GlobalSign SHA-2
+    protocol: RFC 3161
+    url: http://timestamp.globalsign.com/?signature=sha2
+  globalsign_legacy:
+    name: GlobalSign Legacy
+    protocol: RFC 3161
+    url: http://timestamp.globalsign.com/scripts/timstamp.dll
+  wosign:
+    name: WoSign
+    protocol: RFC 3161
+    url: http://timestamp.wosign.com
+  startssl:
+    name: StartSSL
+    protocol: RFC 3161
+    url: http://tsa.startssl.com/rfc3161
+  ncipher:
+    name: nCipher
+    protocol: RFC 3161
+    url: http://dse200.ncipher.com/TSS/HttpTspServer
+  globaltrustfinder:
+    name: GlobalTrustFinder ADSS
+    protocol: RFC 3161
+    url: http://services.globaltrustfinder.com/adss/tsa
+  iaik:
+    name: IAIK TU Graz
+    protocol: RFC 3161
+    url: https://tsp.iaik.tugraz.at/tsp/TspRequest

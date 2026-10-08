@@ -81,7 +81,7 @@ packer -c tar.gz -e age -t both -o backup ~/Documents
 # OpenTimestamps (Bitcoin-calendar based, initially pending confirmation)
 packer -t ots ~/Documents
 
-# RFC 3161 through DigiCert (default), Sectigo, or GlobalSign
+# RFC 3161 through a preset authority (DigiCert default; `packer --list` shows them all)
 packer -t rfc3161 -T sectigo ~/Documents
 
 # Verify any adjacent proof(s); the archive file must be present
@@ -111,15 +111,16 @@ file. Packer avoids a second full-size ZIP copy, so timestamping itself uses
 only small sidecars rather than another package-sized intermediate.
 
 RFC 3161 authorities can be unavailable or change endpoints. The default is
-DigiCert; `--tsa-url` accepts the `digicert`, `sectigo`, and `globalsign`
-presets, or any compatible RFC 3161 HTTP(S) endpoint. Packer verifies the
+DigiCert; `--tsa-url` accepts a preset name or any compatible RFC 3161 HTTP(S)
+endpoint. Run `packer --list` for the full preset list. Packer verifies the
 returned token with the system CA store and checks that it matches the archive
 before saving it. Keep both the archive and its detached proof for later
 verification.
 
 The preset names and RFC 3161 URLs are maintained in
-`config/timestamp_authorities.yml`. Add an authority there to make it available
-as a `--tsa-url` preset, or pass a compatible URL directly.
+`config/timestamp_authorities.yml`, which `packer --list` reads. Add an
+authority there to make it available as a `--tsa-url` preset, or pass a
+compatible URL directly.
 
 ### Compression levels
 
