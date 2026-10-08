@@ -13,3 +13,15 @@ authorities:
     name: GlobalSign
     protocol: RFC 3161
     url: http://timestamp.globalsign.com/tsa/r45standard
+  apple:
+    name: Apple Inc.
+    protocol: RFC 3161
+    url: http://timestamp.apple.com/ts01
+  mesign:
+    name: MeSign
+    protocol: RFC 3161
+    url: http://tsa.mesign.com
+  microsoft:
+    name: Microsoft
+    protocol: RFC 3161
+    url: http://timestamp.acs.microsoft.com
